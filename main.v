@@ -215,7 +215,7 @@ zero = out && zero_num;
 end
 endmodule
 
-module registerfile(portC, portA, portB, decS3, decS2, decS1, decS0, muxAS3, muxAS2, muxAS1, muxAS0, muxBS3, muxBS2, muxBS1, muxBS0, enable, clk);
+module registerfile(R0,R1,R3,R0e,R1e,portC, portA, portB, decS3, decS2, decS1, decS0, muxAS3, muxAS2, muxAS1, muxAS0, muxBS3, muxBS2, muxBS1, muxBS0, enable, clk);
   output wire [31:0] portA, portB;
   input wire decS3;
   input wire decS2;
@@ -224,8 +224,10 @@ module registerfile(portC, portA, portB, decS3, decS2, decS1, decS0, muxAS3, mux
   input wire muxAS3, muxAS2, muxAS1, muxAS0, muxBS3, muxBS2, muxBS1, muxBS0;
   input wire clk, enable;
   input wire [31:0] portC;
-  wire [31:0]R0, R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15;//Register Data
-  wire R0e, R1e, R2e, R3e, R4e, R5e, R6e, R7e, R8e, R9e, R10e, R11e, R12e, R13e, R14e, R15e;//enable for register Rn
+  output wire [31:0]R0, R1,R3;
+  wire[31:0] R2, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15;//Register Data
+  output wire R0e, R1e;
+  wire R2e, R3e, R4e, R5e, R6e, R7e, R8e, R9e, R10e, R11e, R12e, R13e, R14e, R15e;//enable for register Rn
  
   decoder #1registerFileDecoder(R0e, R1e, R2e, R3e, R4e, R5e, R6e, R7e, R8e, R9e, R10e, R11e, R12e, R13e, R14e, R15e, decS3, decS2, decS1, decS0, enable, clk);
  
@@ -245,7 +247,6 @@ module registerfile(portC, portA, portB, decS3, decS2, decS1, decS0, muxAS3, mux
   register #1register13(R13, portC, R13e, clk);
   register #1register14(R14, portC, R14e, clk);
   register #1register15(R15, portC, R15e, clk);
- 
   mux16x1 #1muxA(portA, R0, R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15, muxAS3, muxAS2, muxAS1, muxAS0);
   mux16x1 #1muxB(portB, R0, R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15, muxBS3, muxBS2, muxBS1, muxBS0);
   endmodule
@@ -271,6 +272,7 @@ module decoder(R0e, R1e, R2e, R3e, R4e, R5e, R6e, R7e, R8e, R9e, R10e, R11e, R12
         assign R13e= enable&&S0&&~S1&&S2&&S3&&1'b1;//1101 - R13
         assign R14e= enable&&~S0&&S1&&S2&&S3&&1'b1;//1110 - R14
         assign R15e= enable&&S0&&S1&&S2&&S3&&1'b1;//1111 - R015
+        
       
 endmodule
 
@@ -278,12 +280,13 @@ endmodule
 module register(out, in, enable, clk);
    input wire [31:0] in;
    input wire enable, clk;
-   output reg [31:0] out;
+   output reg [31:0] out = 32'bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx;
    always@(posedge clk)
     begin
         if(enable==1'b1)
-            $display("INREG: %b",in);
+        begin
             out = in;
+        end
     end
 endmodule
 
@@ -605,7 +608,7 @@ module ROM(currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF_S,ShiftE
             ShiftEn = 1'b1;
             SignExtSel = 2'b10;
             RFEn = 1'b1;
-            OP = {5'b0,instruction[24:21]};
+            OP = {1'b0,instruction[24:21]};
             RW = 1;
             MemEn = 0;
             MOC = 1;
@@ -713,24 +716,149 @@ module conditionMux(outR, inR0, inR1, inR2, inR3, select);
     end
 endmodule
 
-module shifter(outR, inR0,select);
+module signextender(outR, inR0,select);
    input wire S1, S0;
    input [31:0] inR0;
    output reg [31:0] outR;
    input [1:0] select;
+   wire [31:0] out;
+   barrel_shifter bs({24'b000000000000000000000000,inR0[7:0]},out,{1'b0,inR0[11:8]});
    always@(select or inR0)
     begin
-   $display("INSHIFT: %b",inR0);
+   //$display("INSHIFT: %b",inR0);
         case(select)
             2'b00 : outR = inR0;
-            2'b01 : outR = inR0[7:0];
+            2'b01 : outR= inR0[7:0];
         
     endcase
-    $display("OUTSHFT: %b",outR);
+    //$display("OUTSHFT: %b",outR);
      //$display("CONDITIONSELECT WAS: %b",select);
      //$display("CONDITIONMUX OUT: %b",outR);
     end
 endmodule
+
+//rotator for 32bitshift001
+
+module barrel_shifter(d,out,m);
+  input [31:0]d;
+  output [31:0]out,q;
+  input[4:0]m;
+  wire[4:0] c = m*2;
+  mux m1(q[0],d,c);
+  mux m2(q[1],{d[0],d[31:1]},c);
+  mux m3(q[2],{d[1:0],d[31:2]},c);
+  mux m4(q[3],{d[2:0],d[31:3]},c);
+  mux m5(q[4],{d[3:0],d[31:4]},c);
+  mux m6(q[5],{d[4:0],d[31:5]},c);
+  mux m7(q[6],{d[5:0],d[31:6]},c);
+  mux m8(q[7],{d[6:0],d[31:7]},c);
+  mux m9(q[8],{d[7:0],d[31:8]},c);
+  mux m10(q[9],{d[8:0],d[31:9]},c);
+  mux m11(q[10],{d[9:0],d[31:10]},c);
+  mux m12(q[11],{d[10:0],d[31:11]},c);
+  mux m13(q[12],{d[11:0],d[31:12]},c);
+  mux m14(q[13],{d[12:0],d[31:13]},c);
+  mux m15(q[14],{d[13:0],d[31:14]},c);
+  mux m16(q[15],{d[14:0],d[31:15]},c);
+  mux m17(q[16],{d[15:0],d[31:16]},c);
+  mux m18(q[17],{d[16:0],d[31:17]},c);
+  mux m19(q[18],{d[17:0],d[31:18]},c);
+  mux m20(q[19],{d[18:0],d[31:19]},c);
+  mux m21(q[20],{d[19:0],d[31:20]},c);
+  mux m22(q[21],{d[20:0],d[31:21]},c);
+  mux m23(q[22],{d[21:0],d[31:22]},c);
+  mux m24(q[23],{d[22:0],d[31:23]},c);
+  mux m25(q[24],{d[23:0],d[31:24]},c);
+  mux m26(q[25],{d[24:0],d[31:25]},c);
+  mux m27(q[26],{d[25:0],d[31:26]},c);
+  mux m28(q[27],{d[26:0],d[31:27]},c);
+  mux m29(q[28],{d[27:0],d[31:28]},c);
+  mux m30(q[29],{d[28:0],d[31:29]},c);
+  mux m31(q[30],{d[29:0],d[31:30]},c);
+  mux m32(q[31],{d[30:0],d[31:31]},c);
+  
+  
+  assign out=q;
+  always@(out)
+  begin
+  $display("BARR: %b",out);
+  end
+endmodule
+
+module mux(y,d,c);
+  input[31:0]d;
+  output y;
+  reg y;
+  input [4:0]c;
+  always @ (c)
+  begin
+    if (c==5'b00000)
+      y = d[0];
+    else if (c==5'b00001)
+      y = d[1];
+      else if (c==5'b00010)
+      y = d[2];
+      else if (c==5'b00011)
+      y = d[3];
+      else if (c==5'b00100)
+      y = d[4];
+      else if (c==5'b00101)
+      y = d[5];
+      else if (c==5'b00110)
+      y = d[6];
+      else if (c==5'b00111)
+      y = d[7];
+      else if (c==5'b01000)
+      y = d[8];
+      else if (c==5'b01001)
+      y = d[9];
+      else if (c==5'b01010)
+      y = d[10];
+      else if (c==5'b01011)
+      y = d[11];
+      else if (c==5'b01100)
+      y = d[12];
+      else if (c==5'b01101)
+      y = d[13];
+      else if (c==5'b01110)
+      y = d[14];
+      else if (c==5'b01111)
+      y = d[15];
+      else if (c==5'b10000)
+      y = d[16];
+      else if (c==5'b10001)
+      y = d[17];
+      else if (c==5'b10010)
+      y = d[18];
+      else if (c==5'b10011)
+      y = d[19];
+      else if (c==5'b10100)
+      y = d[20];
+      else if (c==5'b10101)
+      y = d[21];
+      else if (c==5'b10110)
+      y = d[22];
+      else if (c==5'b10111)
+      y = d[23];
+      else if (c==5'b11000)
+      y = d[24];
+      else if (c==5'b11001)
+      y = d[25];
+      else if (c==5'b11010)
+      y = d[26];
+      else if (c==5'b11011)
+      y = d[27];
+      else if (c==5'b11100)
+      y = d[28];
+      else if (c==5'b11101)
+      y = d[29];
+      else if (c==5'b11110)
+      y = d[30];
+      else if (c==5'b11111)
+      y = d[31];
+    
+    end
+  endmodule
 
 module main;
   wire [7:0] state;
@@ -754,10 +882,10 @@ module main;
   reg Cin;
   //output
   //Condition codes
-  wire zero, n, c, v;
+  wire zero, n, c, v,R0e,R1e;
   //alu+rfo
   wire [3:0] outMC,outMA;
-  wire [31:0] shifterOut;
+  wire [31:0] signExtenderOut,R0,R1,R3;
   encoder enc(instruction, stateEncoder);
   conditionMux cMux(cOutMux,1'b0,1'b1,1'b0,1'b0,{S1,S0});
   inverter invert(cOutMux,Inv, invOut);
@@ -765,17 +893,17 @@ module main;
   multiplexer4x1 mux(outMux, stateEncoder, 8'b00000000, CR, outAdd, M);
   adder add(outMux, 8'b00000001,outAdd);
   ROM rom(currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF_S,ShiftEn,RFEn,RW,MemEn,MOC, Inv, N2, N1, N0,SignExtSel,CR,OP, outMux,clk,S1,S0,instruction);
-  shifter sh(shifterOut,instruction,SHF_S);
-  arithmetic_logic_unit alu(out, zero, n, c, v, portA, shifterOut, OP, Cin);
+  signextender se(signExtenderOut,instruction,SHF_S);
+  arithmetic_logic_unit alu(out, zero, n, c, v, portA, signExtenderOut, OP, Cin);
   rfMux mc(outMC, instruction[15:12], 4'b1111, instruction[19:16], 4'b1110, MC[1], MC[0]);
   rfMux ma(outMA, instruction[19:16],instruction[15:12], 4'b1111,4'b0000, MA[1], MA[0]);
-  registerfile rf(out, portA, portB, outMC[3],outMC[2], outMC[1], outMC[0], outMA[3], outMA[2], outMA[1],outMA[0], instruction[3], instruction[2], instruction[1], instruction[0], RFEn, clk);
+  registerfile rf(R0,R1,R3,R0e,R1e,out, portA, portB, outMC[3],outMC[2], outMC[1], outMC[0], outMA[3], outMA[2], outMA[1],outMA[0], instruction[3], instruction[2], instruction[1], instruction[0], RFEn, clk);
  
   initial
   begin
-      $display("STATE   |   PORT A  |   PORTC   |   OP  |   SHF_S");
-      $monitor("%d          %b      %b      %b      %b",currentState,outMA, outMC,OP,SHF_S);
-      instruction = 32'b11100011110100010010000000000000;
+      $display("STATE   |   R0  |   R1      |       R3");
+      $monitor("%d          %b      %b      %b",currentState,R0, R1,R3);
+      instruction = 32'b11100010000000010000000000000000;
        #1 clk = 1'b0;
        #5 clk = 1'b1;
        #30 clk = 1'b0;
@@ -786,17 +914,9 @@ module main;
        #95 clk = 1'b1;
        #100 clk = 1'b0;
        #105 clk = 1'b1;
-       instruction = 32'b11100010000000010000000000000000;
        #110 clk = 1'b0;
        #115 clk = 1'b1;
-       #120 clk = 1'b0;
-       #125 clk = 1'b1;
-       #130 clk = 1'b0;
-       #135 clk = 1'b1;
-       #140 clk = 1'b0;
-       #145 clk = 1'b1;
        instruction = 32'b11100011100000000001000000101000;
-       #150 clk = 1'b0;
        #120 clk = 1'b0;
        #125 clk = 1'b1;
        #130 clk = 1'b0;
@@ -804,5 +924,21 @@ module main;
        #140 clk = 1'b0;
        #145 clk = 1'b1;
        #150 clk = 1'b0;
+       #155 clk = 1'b1;
+       #160 clk = 1'b0;
+       #165 clk = 1'b1;
+       instruction = 32'b11100010010100010011000000000001;
+       #170 clk = 1'b0;
+       #175 clk = 1'b1;
+       #180 clk = 1'b0;
+       #185 clk = 1'b1;
+       #190 clk = 1'b0;
+       #195 clk = 1'b1;
+       #200 clk = 1'b0;
+       #205 clk = 1'b1;
+       #210 clk = 1'b0;
+       #215 clk = 1'b1;
+       #220 clk = 1'b0;
+       #225 clk = 1'b1;
       end
  endmodule
