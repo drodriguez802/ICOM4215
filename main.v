@@ -101,9 +101,20 @@ module ram_256 (output reg[31:0] DataOut,output reg MOC,input [31:0] DataIn,inpu
             ptr = ptr + 1;
         end
        
+    // Print Initial Memory Contents ---------------------------------------
+        $display("----------------------------------------------");
+        $display("\nInitial memory content. Instructions Loaded.\n");
+        print_memory();
+
+        #10000  // Increment time delay if necessary.
+        // Print Final Memory Contents -----------------------------------------
+        $display("----------------------------------------------");
+        $display("\nFinal memory content.\n");
+        print_memory();
     end
 
 endmodule
+
 
 module arithmetic_logic_unit (output reg [31: 0] out, output reg zero, n, c, v, input [31: 0] A, B, input [4: 0] Op, input Cin);
 //Setting the conditional codes to 0 initially.
@@ -478,11 +489,15 @@ module encoder(instruction, state);
         begin
             state = 8'b00001100;
         end
+        else if(instruction[27:25]==3'b101)
+        begin
+            state = 8'b00001101;
+        end
         //$display("STATE: %b", state);
     end
 endmodule
 
-module ROM(DataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF_S,ShiftEn,RFEn,RW,MemEn,MOV, Inv, N2, N1, N0,SignExtSel,CR,OP, state, clk,S1,S0,instruction);
+module ROM(zero,DataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF_S,ShiftEn,RFEn,RW,MemEn,MOV, Inv, N2, N1, N0,SignExtSel,CR,OP, state, clk,S1,S0,instruction);
    output reg MBS = 1'b0,  MUXMDR = 0, MDREn = 0, MAREn = 0, IREn = 1'b0, Inv=1'b0, N2=0, N1=1, N0=1, S1 = 1'b0, S0 = 1'b0,ShiftEn = 0,RFEn = 1'b1,RW = 0, MemEn = 0, MOC = 1, MOV = 1;
    output reg [1:0]SignExtSel = 2'b00,MA = 2'b00, MB = 2'b10,MBSMRF = 2'b00,DataType = 2'b10;
    output reg [2:0] MC = 3'b001,SHF_S = 3'b000;
@@ -491,7 +506,7 @@ module ROM(DataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF
    output reg [7:0] currentState = 8'b00000000;
    input wire [7:0] state;
    input wire [31:0] instruction;
-   input wire clk;
+   input wire clk,zero;
 
    always@(posedge clk)
     begin
@@ -829,6 +844,66 @@ module ROM(DataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF
             S0 = 0;
             CR = 6'b000001;
             end
+        else if(state==8'b00001100)
+            begin
+            currentState = 8'b00001100;
+            MA = 2'b00;
+            MB = 2'b01;
+            MC = 2'b00;
+            MBS = 1'b1;
+            MBSMRF = 2'b10;
+            MUXMDR = 0;
+            MDREn = 0;
+            MAREn = 1'b0;
+            IREn = 1'b0;
+            SHF_S = 2'b11;
+            ShiftEn = 1'b1;
+            SignExtSel = 2'b10;
+            DataType = 2'b00;
+            RFEn = 1'b1;
+            OP = {1'b0,instruction[24:21]};
+            RW = 1;
+            MemEn = 1'b0;
+            MOC = 1;
+            MOV = 1;
+            N2 = 0;
+            N1 = 1;
+            N0 = 0;
+            Inv = 0;
+            S1 = 1;
+            S0 = 0;
+            CR = 6'b000001;
+            end
+        else if(state==8'b00001101)
+            begin
+            currentState = 8'b00001101;
+            MA = 2'b00;
+            MB = 2'b01;
+            MC = 2'b00;
+            MBS = 1'b1;
+            MBSMRF = 2'b10;
+            MUXMDR = 0;
+            MDREn = 0;
+            MAREn = 1'b0;
+            IREn = 1'b0;
+            SHF_S = 2'b11;
+            ShiftEn = 1'b1;
+            SignExtSel = 2'b10;
+            DataType = 2'b00;
+            RFEn = 1'b1;
+            OP = {1'b0,instruction[24:21]};
+            RW = 1;
+            MemEn = 1'b0;
+            MOC = 1;
+            MOV = 1;
+            N2 = 0;
+            N1 = 1;
+            N0 = 0;
+            Inv = 0;
+            S1 = 1;
+            S0 = 0;
+            CR = 6'b000001;
+            end
     end
 endmodule
 
@@ -955,6 +1030,7 @@ module signextender(outR, inR0,select);
             2'b00 : outR = inR0;
             2'b01 : outR= inR0[7:0];
             2'b10 : outR= {5'h00000,inR0[11:0]};
+            2'b11 : outR={5'h0000000,inR0[3:0]};
         
     endcase
     //$display("OUTSHFT: %b",outR);
@@ -1159,7 +1235,7 @@ module main;
   multiplexer4x1 mux(outMux, stateEncoder, 8'b00000000, CR, outAdd, M);
   multiplexerB b(outMB, portB, signExtenderOut, 32'h00000000, memOut, MB);
   adder add(outMux, 8'b00000001,outAdd);
-  ROM rom(dataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF_S,ShiftEn,RFEn,RW,MemEn,MOV, Inv, N2, N1, N0,SignExtSel,CR,OP, outMux,clk,S1,S0,instruction);
+  ROM rom(zero,dataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF_S,ShiftEn,RFEn,RW,MemEn,MOV, Inv, N2, N1, N0,SignExtSel,CR,OP, outMux,clk,S1,S0,instruction);
   signextender se(signExtenderOut,instruction,SHF_S);
   arithmetic_logic_unit alu(out, zero, n, c, v, portA, outMB, OP, Cin);
   rfMux mc(outMC, instruction[15:12], 4'b1111, instruction[19:16], 4'b1110, MC[1], MC[0]);
