@@ -1,4 +1,111 @@
-module arithmetic_logic_unit (output reg [31: 0] out, output reg zero, n, c, v, input [31: 0] A, B, input [5: 0] Op, input Cin);
+module ram_256 (output reg[31:0] DataOut,output reg MOC,input [31:0] DataIn,input R_W,input MOV,input [7:0] Address,input [1:0] size,state);
+    reg[7:0] Mem[0:255];
+
+    // For loading instructions to RAM
+    integer fd, code;
+    reg[7:0] data, ptr;
+
+    // Task to print memory contents
+    task print_memory;
+    begin
+        ptr = 0;
+        $display("Address  | Content");
+        $display("----------------------------------------------");
+        repeat(20) begin
+            $write("%d      | ", ptr);
+            repeat(4) begin
+                $write("%h ", Mem[ptr]);
+                ptr = ptr + 1;
+            end
+            $write("\n");
+        end
+        $display("\n");
+    end
+    endtask
+
+    always @(MOV, R_W)
+        begin
+            if (MOV)
+                begin
+                    if(R_W)
+                    begin
+                        case(size)
+                            // READING
+                            // Byte
+                            2'b00:
+                                begin
+                                    DataOut[7:0] <= Mem[Address];
+                                    DataOut[31:8] <= 24'b0;
+                                end
+                            // Halfword
+                            2'b01:
+                                begin
+                                    DataOut[15:8] <= Mem[Address];
+                                    DataOut[7:0] <= Mem[Address + 1];
+                                    DataOut[31:16] <= 16'b0;
+                                end
+                            // Word
+                            2'b10:
+                                begin
+                                    DataOut[31:24] <= Mem[Address];
+                                    DataOut[23:16] <= Mem[Address+1];
+                                    DataOut[15:8] <= Mem[Address+2];
+                                    DataOut[7:0] <= Mem[Address+3];
+                                end
+                                
+                        endcase
+                        $display("STATE: %d MAR: %d DATAOUT: %b",state,Address,DataOut);
+                        end
+                    else
+                    
+                    $display("STATE: %d MAR: %d DATAIN: %b",state,Address,DataIn);
+                        case(size)
+                            // WRITING
+                            // Byte
+                            2'b00:begin
+                                Mem[Address] <= DataIn[7:0];
+                                end
+                                
+                            // Halfword
+                            2'b01:
+                                begin
+                                    Mem[Address] <= DataIn[15:8];
+                                    Mem[Address + 1] <= DataIn[7:0];
+                                end
+                            // Word
+                            2'b10:
+                                begin
+                                    Mem[Address] <= DataIn[31:24];
+                                    Mem[Address+1] <= DataIn[23:16];
+                                    Mem[Address+2] <= DataIn[15:8];
+                                    Mem[Address+3] <= DataIn[7:0];
+                                end
+                        endcase
+                    // Turn MOC on After Operation was successful
+                    MOC = 1;
+                end
+            else
+                begin
+                    //DataOut = 32'bz;
+                    MOC = 0;
+                end
+            
+        end
+
+    initial begin
+        ptr = 0;
+        // Load RAM with instructions ------------------------------------------
+        fd = $fopen("testcode_arm1.txt", "r");//change here check this
+        while(!($feof(fd)) && $fscanf(fd, "%b", data)) begin
+            Mem[ptr] = data;
+            ptr = ptr + 1;
+        end
+       
+    end
+
+endmodule
+
+module arithmetic_logic_unit (output reg [31: 0] out, output reg zero, n, c, v, input [31: 0] A, B, input [4: 0] Op, input Cin);
 //Setting the conditional codes to 0 initially.
 
 //Setting interconexions
@@ -212,10 +319,11 @@ if((Op<5'b01000) || (Op>5'b01011)) n = out[31];
 else n = temp[31];
 //Z
 zero = out && zero_num;
+//$display("A: %b B: %b out: %d   OP: %b",A,B,out,Op);
 end
 endmodule
 
-module registerfile(R0,R1,R3,R0e,R1e,portC, portA, portB, decS3, decS2, decS1, decS0, muxAS3, muxAS2, muxAS1, muxAS0, muxBS3, muxBS2, muxBS1, muxBS0, enable, clk);
+module registerfile(R0,R3,R2,R1,R15,R0e,R1e,portC, portA, portB, decS3, decS2, decS1, decS0, muxAS3, muxAS2, muxAS1, muxAS0, muxBS3, muxBS2, muxBS1, muxBS0, enable, clk);
   output wire [31:0] portA, portB;
   input wire decS3;
   input wire decS2;
@@ -224,8 +332,8 @@ module registerfile(R0,R1,R3,R0e,R1e,portC, portA, portB, decS3, decS2, decS1, d
   input wire muxAS3, muxAS2, muxAS1, muxAS0, muxBS3, muxBS2, muxBS1, muxBS0;
   input wire clk, enable;
   input wire [31:0] portC;
-  output wire [31:0]R0, R1,R3;
-  wire[31:0] R2, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15;//Register Data
+  output wire [31:0]R0,R2,R3, R1,R15;
+  wire[31:0]  R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14;//Register Data
   output wire R0e, R1e;
   wire R2e, R3e, R4e, R5e, R6e, R7e, R8e, R9e, R10e, R11e, R12e, R13e, R14e, R15e;//enable for register Rn
  
@@ -285,6 +393,7 @@ module register(out, in, enable, clk);
     begin
         if(enable==1'b1)
         begin
+            //$display("REGIN: %b",in);
             out = in;
         end
     end
@@ -356,27 +465,29 @@ module encoder(instruction, state);
             //$display("STATE 5");
             state = 8'b00000101;
             end
-        else if(instruction[27:25]==3'b101&&instruction[24]==0)
+        else if(instruction[27:25]==3'b011)
             begin
-            //$display("STATE 10");
+            //$display("STATE 6");
+            state = 8'b00000110;
+            end
+        else if(instruction[27:25]==3'b010)
+        begin
             state = 8'b00001010;
-            end
-        else if(instruction[27:25]==3'b101&&instruction[24]==1)
-            begin
-            //$display("STATE 11");
-            state = 8'b00001011;
-            end
+        end
+        else if(instruction[27:25]==3'b000)
+        begin
+            state = 8'b00001100;
+        end
         //$display("STATE: %b", state);
     end
 endmodule
-//ROM For Load immediate Offset and Register Offset
-//ROM For Load immediate Offset and Register Offset
-module ROM(currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF_S,ShiftEn,RFEn,RW,MemEn,MOC, Inv, N2, N1, N0,SignExtSel,CR,OP, state, clk,S1,S0,instruction);
-   output reg MBS = 1'b0,  MUXMDR = 0, MDREn = 0, MAREn = 0, IREn = 0, Inv=1'b0, N2=0, N1=1, N0=1, S1 = 1'b0, S0 = 1'b0,ShiftEn = 0,RFEn = 1'b0,RW = 0, MemEn = 0, MOC = 1, MOV = 1;
-   output reg [1:0]SignExtSel = 2'b00,MA = 2'b00, MB = 2'b10, MBSMRF = 2'b00,DataType = 2'b00;
+
+module ROM(DataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF_S,ShiftEn,RFEn,RW,MemEn,MOV, Inv, N2, N1, N0,SignExtSel,CR,OP, state, clk,S1,S0,instruction);
+   output reg MBS = 1'b0,  MUXMDR = 0, MDREn = 0, MAREn = 0, IREn = 1'b0, Inv=1'b0, N2=0, N1=1, N0=1, S1 = 1'b0, S0 = 1'b0,ShiftEn = 0,RFEn = 1'b1,RW = 0, MemEn = 0, MOC = 1, MOV = 1;
+   output reg [1:0]SignExtSel = 2'b00,MA = 2'b00, MB = 2'b10,MBSMRF = 2'b00,DataType = 2'b10;
    output reg [2:0] MC = 3'b001,SHF_S = 3'b000;
    output reg [5:0] CR = 6'b000001;
-   output reg [4:0]OP = 5'b00000;
+   output reg [4:0]OP = 5'b01101;
    output reg [7:0] currentState = 8'b00000000;
    input wire [7:0] state;
    input wire [31:0] instruction;
@@ -390,27 +501,27 @@ module ROM(currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF_S,ShiftE
             MA = 2'b00;
             MB = 2'b10;
             MC = 2'b01;
-            MBS = 1'b0;
-            MBSMRF = 1'b0;
+            MBS = 1'b1;
+            MBSMRF = 2'b10;
             MUXMDR = 0;
+            DataType = 2'b10;
             MDREn = 0;
-            MAREn = 0;
-            IREn = 0;
-            SHF_S = 3'b000;
-            ShiftEn = 0;
-            SignExtSel = 2'b00;
-            RFEn = 1'b0;
+            MAREn = 1;
+            IREn = 1'b0;
+            SHF_S = 3'b01;
+            ShiftEn = 1'b1;
+            SignExtSel = 2'b10;
+            RFEn = 1'b1;
             OP = 5'b01101;
-            DataType = 2'b00;
-            RW = 0;
+            RW = 1;
             MemEn = 0;
             MOC = 1;
-            MOV = 1;
+            MOV = 0;
             N2 = 0;
             N1 = 1;
-            N0 = 1;
+            N0 = 0;
             Inv = 0;
-            S1 = 0;
+            S1 = 1;
             S0 = 0;
             CR = 6'b000001;
             end
@@ -424,18 +535,18 @@ module ROM(currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF_S,ShiftE
             MBSMRF = 1'b0;
             MUXMDR = 0;
             MDREn = 0;
-            MAREn = 1;
-            IREn = 0;
+            MAREn = 1'b1;
+            IREn = 1'b1;
             SHF_S = 3'b000;
             ShiftEn = 0;
             SignExtSel = 2'b00;
             RFEn = 1'b0;
-            OP = 5'b10001;
-            DataType = 2'b00;
-            RW = 0;
+            OP = 5'b10000;
+            DataType = 2'b10;
+            RW = 1'b1;
             MemEn = 0;
-            MOC = 1;
-            MOV = 1;
+            MOC = 1'b1;
+            MOV = 1'b1;
             N2 = 0;
             N1 = 1;
             N0 = 1;
@@ -449,23 +560,19 @@ module ROM(currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF_S,ShiftE
             currentState = 8'b00000010;
             MA = 2'b10;
             MB = 2'b00;
-            MC = 2'b10;
+            MC = 2'b01;
             MBS = 1'b0;
             MBSMRF = 1'b0;
             MUXMDR = 0;
             MDREn = 0;
             MAREn = 0;
-            IREn = 0;
+            IREn = 1'b0;
             SHF_S = 3'b000;
             ShiftEn = 0;
             SignExtSel = 2'b00;
-            RFEn = 1'b0;
+            RFEn = 1'b1;
             OP = 5'b10001;
-            DataType = 2'b00;
-            RW = 0;
-            MemEn = 1;
-            MOC = 0;
-            MOV = 1;
+            MemEn = 1'b0;
             N2 = 0;
             N1 = 1;
             N0 = 1;
@@ -485,13 +592,12 @@ module ROM(currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF_S,ShiftE
             MUXMDR = 0;
             MDREn = 0;
             MAREn = 0;
-            IREn = 1;
+            IREn = 1'b1;
             SHF_S = 3'b000;
             ShiftEn = 0;
             SignExtSel = 2'b00;
             RFEn = 1'b0;
             OP = 5'b10001;
-            DataType = 2'b00;
             RW = 1;
             MemEn = 1;
             MOC = 1;
@@ -515,13 +621,12 @@ module ROM(currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF_S,ShiftE
             MUXMDR = 0;
             MDREn = 0;
             MAREn = 0;
-            IREn = 1;
+            IREn = 1'b1;
             SHF_S = 3'b000;
             ShiftEn = 0;
             SignExtSel = 2'b00;
             RFEn = 1'b0;
             OP = 5'b10001;
-            DataType = 2'b00;
             RW = 0;
             MemEn = 0;
             MOC = 0;
@@ -534,64 +639,7 @@ module ROM(currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF_S,ShiftE
             S0 = 1;
             CR = 6'b000001;
             end
-        else if(state==8'b00001010)
-            begin
-            currentState = 8'b00001010;
-            MA = 2'b01;
-            MB = 2'b00;
-            MC = 2'b01;
-            MBS = 1'b0;
-            MBSMRF = 2'b10;
-            MUXMDR = 0;
-            MDREn = 0;
-            MAREn = 0;
-            IREn = 0;
-            SHF_S = 2'b00;
-            ShiftEn = 0;
-            SignExtSel = 2'b00;
-            RFEn = 1'b0;
-            OP = 5'b11111;
-            RW = 0;
-            MemEn = 0;
-            MOC = 1;
-            MOV = 1;
-            N2 = 0;
-            N1 = 1;
-            N0 = 1;
-            Inv = 0;
-            S1 = 0;
-            S0 = 0;
-            CR = 6'b000001;
-            end
-        else if(state==8'b00001011)
-            begin
-            currentState = 8'b00001011;
-            MA = 2'b10;
-            MB = 2'b00;
-            MC = 2'b11;
-            MBS = 1'b0;
-            MBSMRF = 2'b10;
-            MUXMDR = 0;
-            MDREn = 0;
-            MAREn = 0;
-            IREn = 0;
-            SHF_S = 2'b00;
-            ShiftEn = 0;
-            SignExtSel = 2'b00;
-            RFEn = 1'b0;
-            OP = 5'b11111;
-            RW = 0;
-            MemEn = 0;
-            MOC = 1;
-            MOV = 1;
-            N2 = 0;
-            N1 = 1;
-            N0 = 0;
-            Inv = 0;
-            S1 = 1;
-            S0 = 0;
-            CR = 6'b000001;
-            end
+        
          else if(state==8'b00000101)
             begin
             currentState = 8'b00000101;
@@ -602,17 +650,177 @@ module ROM(currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF_S,ShiftE
             MBSMRF = 2'b10;
             MUXMDR = 0;
             MDREn = 0;
-            MAREn = 1;
-            IREn = 1;
+            MAREn = 1'b0;
+            IREn = 1'b0;
             SHF_S = 3'b01;
             ShiftEn = 1'b1;
             SignExtSel = 2'b10;
+            DataType = 2'b00;
             RFEn = 1'b1;
             OP = {1'b0,instruction[24:21]};
             RW = 1;
-            MemEn = 0;
+            MemEn = 1'b0;
             MOC = 1;
             MOV = 1;
+            N2 = 0;
+            N1 = 1;
+            N0 = 0;
+            Inv = 0;
+            S1 = 1;
+            S0 = 0;
+            CR = 6'b000001;
+            end
+        else if(state==8'b00000110)
+            begin
+            currentState = 8'b00000110;
+            MB = 2'b11;
+            MC = 2'b00;
+            MBS = 1'b0;
+            MBSMRF = 1'b0;
+            MUXMDR = 0;
+            MDREn = 0;
+            MAREn = 1'b1;
+            IREn = 1'b1;
+            SHF_S = 3'b000;
+            ShiftEn = 0;
+            SignExtSel = 2'b00;
+            RFEn = 1'b0;
+            OP = 5'b10000;
+            DataType = 2'b00;
+            RW = 1'b1;
+            MemEn = 0;
+            MOC = 1'b1;
+            MOV = 1'b1;
+            N2 = 0;
+            N1 = 1;
+            N0 = 1;
+            Inv = 0;
+            S1 = 1;
+            S0 = 1;
+            CR = 6'b000111;
+            end
+        else if(state==8'b00000111)
+            begin
+            currentState = 8'b00000111;
+            MA = 2'b00;
+            MC = 2'b00;
+            MB = 2'b11;
+            MBS = 1'b0;
+            MDREn = 0;
+            MAREn = 1'b1;
+            SHF_S = 3'b000;
+            ShiftEn = 0;
+            SignExtSel = 2'b00;
+            DataType = 2'b00;
+            RFEn = 1'b1;
+            IREn = 1'b0;
+            OP = 5'b01101;
+            RW = 1'b1;
+            MemEn = 1'b1;
+            MOV = 1'b1;
+            N2 = 0;
+            N1 = 1;
+            N0 = 1;
+            Inv = 0;
+            S1 = 0;
+            S0 = 0;
+            CR = 6'b001000;
+            end
+        else if(state==8'b00001000)
+            begin
+            currentState = 8'b00001000;
+            MA = 2'b00;
+            MB = 2'b11;
+            MC = 2'b00;
+            MBS = 1'b0;
+            MDREn = 0;
+            MAREn = 1'b1;
+            SHF_S = 3'b000;
+            ShiftEn = 0;
+            SignExtSel = 2'b00;
+            DataType = 2'b00;
+            RFEn = 1'b0;
+            IREn = 1'b0;
+            OP = 5'b01101;
+            RW = 1'b1;
+            MemEn = 1'b1;
+            MOV = 1'b1;
+            N2 = 0;
+            N1 = 1;
+            N0 = 1;
+            Inv = 0;
+            S1 = 0;
+            S0 = 0;
+            CR = 6'b001001;
+            end
+        else if(state==8'b00001001)
+            begin
+            currentState = 8'b00001001;
+            IREn = 1'b1;
+            OP = 5'b01101;
+            RW = 1'b1;
+            MemEn = 1'b1;
+            DataType = 2'b00;
+            MOV = 1'b1;
+            N2 = 0;
+            N1 = 1;
+            N0 = 0;
+            Inv = 0;
+            S1 = 1;
+            S0 = 0;
+            CR = 6'b000001;
+            end
+        else if(state==8'b00001010)
+            begin
+            currentState = 8'b00001010;
+            MC = 2'b00;
+            MB = 2'b01;
+            SHF_S = 2'b10;
+            IREn = 1'b0;
+            OP = 5'b00100;
+            DataType = 2'b00;
+            RFEn = 1'b0;
+            RW = 1'b0;
+            MemEn = 1'b0;
+            MAREn = 1'b1;
+            N2 = 0;
+            N1 = 1;
+            N0 = 0;
+            Inv = 0;
+            S1 = 1;
+            S0 = 0;
+            CR = 6'b001011;
+            end
+        else if(state==8'b00001011)
+            begin
+            currentState = 8'b00001011;
+            MA = 2'b01;
+            IREn = 1'b0;
+            OP = 5'b10000;
+            DataType = 2'b00;
+            RFEn = 1'b0;
+            RW = 1'b0;
+            MemEn = 1'b1;
+            MAREn = 1'b0;
+            N2 = 0;
+            N1 = 1;
+            N0 = 0;
+            Inv = 0;
+            S1 = 1;
+            S0 = 0;
+            CR = 6'b000001;
+            end
+        else if(state==8'b00001100)
+            begin
+            currentState = 8'b00001100;
+            MA = 2'b01;
+            IREn = 1'b0;
+            OP = 5'b10000;
+            DataType = 2'b00;
+            RFEn = 1'b0;
+            RW = 1'b0;
+            MemEn = 1'b1;
+            MAREn = 1'b0;
             N2 = 0;
             N1 = 1;
             N0 = 0;
@@ -628,6 +836,23 @@ module multiplexer4x1(outR, inR0, inR1, inR2, inR3, select);
    input wire S1, S0;
    input [7:0] inR0, inR1, inR2, inR3;
    output reg [7:0] outR = 8'b00000000;
+   input [1:0] select;
+   always@(select or inR0 or inR1 or inR2 or inR3)
+    begin
+        case(select)
+            2'b00 : outR = inR0;
+            2'b01 : outR = inR1;
+            2'b10 : outR = inR2;
+            2'b11 : outR = inR3;
+    endcase
+     //$display("SELECT WAS: %b AND OUT WAS: %b",select, outR);
+    end
+endmodule
+
+module multiplexerB(outR, inR0, inR1, inR2, inR3, select);
+   input wire S1, S0;
+   input [31:0] inR0, inR1, inR2, inR3;
+   output reg [31:0] outR = 8'h00000000;
    input [1:0] select;
    always@(select or inR0 or inR1 or inR2 or inR3)
     begin
@@ -729,6 +954,7 @@ module signextender(outR, inR0,select);
         case(select)
             2'b00 : outR = inR0;
             2'b01 : outR= inR0[7:0];
+            2'b10 : outR= {5'h00000,inR0[11:0]};
         
     endcase
     //$display("OUTSHFT: %b",outR);
@@ -781,7 +1007,7 @@ module barrel_shifter(d,out,m);
   assign out=q;
   always@(out)
   begin
-  $display("BARR: %b",out);
+  //$display("BARR: %b",out);
   end
 endmodule
 
@@ -859,25 +1085,63 @@ module mux(y,d,c);
     
     end
   endmodule
+  
+module instructionRegister(in,out,IREn,clk);
+input [31:0] in;
+output reg [31:0] out;
+input wire IREn,clk;
+always@(posedge clk)
+begin
+if(IREn==1'b1)
+begin
+//$display("INSTRUCTION: %b",in);
+ out = in;
+ end
+ end
+endmodule
+
+module MAR(in,out,enable);
+input [31:0] in;
+input wire enable;
+output reg [7:0] out;
+always@(in)
+begin
+if(enable==1'b1)
+begin
+
+//$display("MAR: %d",in[7:0]);
+ out = in[7:0];
+ end
+ end
+endmodule
 
 module main;
   wire [7:0] state;
   wire [7:0] stateEncoder;
-  reg [31:0] instruction;
+  wire [31:0] instruction;
   wire [31:0] out;
   wire [7:0] outMux;
   wire MBS,MUXMDR,MDREn,MAREn,IREn,ShiftEn,RFEn,RW,MemEn,MOC, Inv, N2, N1, N0, S1, S0, Sts,iBit, inv, cOutMux,invOut;
   wire [1:0]SignExtSel,MA,MB,MBSMRF;
-  wire [2:0] MC,SHF_S;
+  wire [2:0] MC;
+  wire [1:0] SHF_S;
   wire [5:0] CR;
   wire [4:0] OP;
   wire [7:0] outAdd;
-  wire [1:0] M;
+  wire [1:0] M,dataType;
   reg clk, c0, c1;
   //alu+rf
   wire [31:0] portA,portB;
   wire [7:0]currentState;
-
+  
+  //MEMORIA
+  wire [31:0]memIn;
+  wire [31:0] memOut;
+  wire R_W,MOV;
+  wire [7:0] address;
+  
+  ram_256 ram(memOut,MOC,out,RW,MemEn,address,dataType,stateEncoder);
+  MAR mar(out,address,MAREn);
   //Cin
   reg Cin;
   //output
@@ -885,60 +1149,101 @@ module main;
   wire zero, n, c, v,R0e,R1e;
   //alu+rfo
   wire [3:0] outMC,outMA;
-  wire [31:0] signExtenderOut,R0,R1,R3;
+  wire [31:0] signExtenderOut,R3,R0,R1,R2,R15,outMB;
+  
+  instructionRegister ir(memOut,instruction,IREn,clk);
   encoder enc(instruction, stateEncoder);
   conditionMux cMux(cOutMux,1'b0,1'b1,1'b0,1'b0,{S1,S0});
   inverter invert(cOutMux,Inv, invOut);
   nextStAddSel next(M, invOut, N2, N1, N0);
   multiplexer4x1 mux(outMux, stateEncoder, 8'b00000000, CR, outAdd, M);
+  multiplexerB b(outMB, portB, signExtenderOut, 32'h00000000, memOut, MB);
   adder add(outMux, 8'b00000001,outAdd);
-  ROM rom(currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF_S,ShiftEn,RFEn,RW,MemEn,MOC, Inv, N2, N1, N0,SignExtSel,CR,OP, outMux,clk,S1,S0,instruction);
+  ROM rom(dataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF_S,ShiftEn,RFEn,RW,MemEn,MOV, Inv, N2, N1, N0,SignExtSel,CR,OP, outMux,clk,S1,S0,instruction);
   signextender se(signExtenderOut,instruction,SHF_S);
-  arithmetic_logic_unit alu(out, zero, n, c, v, portA, signExtenderOut, OP, Cin);
+  arithmetic_logic_unit alu(out, zero, n, c, v, portA, outMB, OP, Cin);
   rfMux mc(outMC, instruction[15:12], 4'b1111, instruction[19:16], 4'b1110, MC[1], MC[0]);
   rfMux ma(outMA, instruction[19:16],instruction[15:12], 4'b1111,4'b0000, MA[1], MA[0]);
-  registerfile rf(R0,R1,R3,R0e,R1e,out, portA, portB, outMC[3],outMC[2], outMC[1], outMC[0], outMA[3], outMA[2], outMA[1],outMA[0], instruction[3], instruction[2], instruction[1], instruction[0], RFEn, clk);
+  registerfile rf(R0,R3,R2,R1,R15,R0e,R1e,out, portA, portB, outMC[3],outMC[2], outMC[1], outMC[0], outMA[3], outMA[2], outMA[1],outMA[0], instruction[3], instruction[2], instruction[1], instruction[0], RFEn, clk);
  
   initial
   begin
-      $display("STATE   |   R0  |   R1      |       R3");
-      $monitor("%d          %b      %b      %b",currentState,R0, R1,R3);
-      instruction = 32'b11100010000000010000000000000000;
-       #1 clk = 1'b0;
+      //$display("STATE   |");
+      //$monitor("%d            ",currentState);
+       #0 clk = 1'b0;
        #5 clk = 1'b1;
+       #10 clk = 1'b0;
+       #15 clk = 1'b1;
+       #20 clk = 1'b0;
+       #25 clk = 1'b1;
        #30 clk = 1'b0;
        #35 clk = 1'b1;
+       #40 clk = 1'b0;
+       #45 clk = 1'b1;
+       #50 clk = 1'b0;
+       #55 clk = 1'b1;
+       #60 clk = 1'b0;
+       #65 clk = 1'b1;
        #70 clk = 1'b0;
        #75 clk = 1'b1;
+       #80 clk = 1'b0;
+       #85 clk = 1'b1;
        #90 clk = 1'b0;
        #95 clk = 1'b1;
-       #100 clk = 1'b0;
+       #100 clk = 1'b0; 
        #105 clk = 1'b1;
        #110 clk = 1'b0;
        #115 clk = 1'b1;
-       instruction = 32'b11100011100000000001000000101000;
        #120 clk = 1'b0;
        #125 clk = 1'b1;
        #130 clk = 1'b0;
        #135 clk = 1'b1;
-       #140 clk = 1'b0;
-       #145 clk = 1'b1;
-       #150 clk = 1'b0;
-       #155 clk = 1'b1;
-       #160 clk = 1'b0;
-       #165 clk = 1'b1;
-       instruction = 32'b11100010010100010011000000000001;
-       #170 clk = 1'b0;
-       #175 clk = 1'b1;
-       #180 clk = 1'b0;
-       #185 clk = 1'b1;
-       #190 clk = 1'b0;
-       #195 clk = 1'b1;
-       #200 clk = 1'b0;
-       #205 clk = 1'b1;
-       #210 clk = 1'b0;
-       #215 clk = 1'b1;
-       #220 clk = 1'b0;
-       #225 clk = 1'b1;
+      #140 clk = 1'b0;
+      #145 clk = 1'b1;
+      #150 clk = 1'b0;
+      #155 clk = 1'b1;
+      #160 clk = 1'b0;
+      #165 clk = 1'b1;
+      #170 clk = 1'b0;
+      #175 clk = 1'b1;
+      #180 clk = 1'b0;
+      #185 clk = 1'b1;
+      #190 clk = 1'b0;
+      #195 clk = 1'b1;
+      #200 clk = 1'b0;
+      #205 clk = 1'b1;
+      #210 clk = 1'b0;
+      #215 clk = 1'b1;
+      #220 clk = 1'b0;
+      #225 clk = 1'b1;
+      #230 clk = 1'b0;
+      #235 clk = 1'b1;
+      #240 clk = 1'b0;
+      #245 clk = 1'b1;
+      #250 clk = 1'b0;
+      #255 clk = 1'b1;
+      #260 clk = 1'b0;
+      #265 clk = 1'b1;
+      #270 clk = 1'b0;
+      #275 clk = 1'b1;
+      #280 clk = 1'b0;
+      #285 clk = 1'b1;
+      #290 clk = 1'b0;
+      #295 clk = 1'b1;
+      #300 clk = 1'b0;
+      #305 clk = 1'b1;
+      #310 clk = 1'b0;
+      #315 clk = 1'b1;
+      #320 clk = 1'b0;
+      #325 clk = 1'b1;
+      #330 clk = 1'b0;
+      #335 clk = 1'b1;
+      #340 clk = 1'b0;
+      #355 clk = 1'b1;
+      #360 clk = 1'b0;
+      #365 clk = 1'b1;
+      #370 clk = 1'b0;
+      #375 clk = 1'b1;
+      #380 clk = 1'b0;
       end
  endmodule
