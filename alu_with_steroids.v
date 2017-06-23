@@ -224,7 +224,7 @@ endcase
 if((Op<5'b01000) || (Op>5'b01011)) n = out[31];
 else n = temp[31];
 //Z
-zero = out && zero_num;
+zero = ~out && ~zero_num;
 end
 endmodule
 
@@ -239,9 +239,6 @@ module alu_tester;
   //Cin
   reg Cin;
 
-  //Signed Variables
-  reg signed [31: 0] temp;
-
   //output
   wire [31: 0] out;
   //Condition codes
@@ -254,14 +251,17 @@ module alu_tester;
   initial #500 $finish;
 
 	initial begin
-	//B = 40
-	A = 32'h9C4;
-	//Set A to temp = -1
-	temp = 32'hFFFFFF6A;
-	B = temp;
-	//A + B
-	//Should give 36
-	Op = 5'b10011;
-	$monitor("A = %d  B = %d  Out = %d  Time = %0d", A, B, out, $time);
+	// //A = 32
+	// A = 32'h20;
+	// //Set B to temp = -4
+	// B = 32'hFFFFFFFC;
+	// //A + B
+	// //Should give 36
+	// Op = 5'b10011;
+	A = 32'h1;
+	B = 32'h1;
+	Op = 32'b00010;
+	$monitor("A = %d  B = %d  Out = %d  Z = %b Time = %0d", A, B, out,zero, $time);
+
 	end
 endmodule
