@@ -102,7 +102,7 @@ module ram_256 (output reg[31:0] DataOut,output reg MOC,input [31:0] DataIn,inpu
             ptr = ptr + 1;
         end
 
-    Print Initial Memory Contents ---------------------------------------
+    // Print Initial Memory Contents ---------------------------------------
         $display("----------------------------------------------");
         $display("\nInitial memory content. Instructions Loaded.\n");
         print_memory();
@@ -515,7 +515,7 @@ module encoder(instruction, state);
     end
 endmodule
 
-module ROM(R3,zero,DataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF_S,ShiftEn,RFEn,RW,MemEn,MOV, Inv, N2, N1, N0,SignExtSel,CR,OP, state, clk,S1,S0,instruction);
+module ROM(R15,R3,zero,DataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF_S,ShiftEn,RFEn,RW,MemEn,MOV, Inv, N2, N1, N0,SignExtSel,CR,OP, state, clk,S1,S0,instruction);
    output reg MBS = 1'b0,  MUXMDR = 0, MDREn = 0, MAREn = 0, IREn = 1'b0, Inv=1'b0, N2=0, N1=1, N0=1, S1 = 1'b0, S0 = 1'b0,ShiftEn = 0,RFEn = 1'b1,RW = 0, MemEn = 0, MOC = 1, MOV = 1;
    output reg [1:0]SignExtSel = 2'b00,MA = 2'b00, MB = 2'b10,MBSMRF = 2'b00,DataType = 2'b10;
    output reg [2:0] MC = 3'b001,SHF_S = 3'b000;
@@ -523,7 +523,7 @@ module ROM(R3,zero,DataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,
    output reg [4:0]OP = 5'b01101;
    output reg [7:0] currentState = 8'b00000000;
    input wire [7:0] state;
-   input wire [31:0] instruction,R3;
+   input wire [31:0] instruction,R3,R15;
    input wire clk,zero;
 
    always@(posedge clk)
@@ -598,7 +598,7 @@ module ROM(R3,zero,DataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,
             MBSMRF = 1'b0;
             MUXMDR = 0;
             MDREn = 0;
-            MAREn = 1'b0;
+            MAREn = 0;
             IREn = 1'b0;
             SHF_S = 3'b000;
             ShiftEn = 0;
@@ -624,7 +624,7 @@ module ROM(R3,zero,DataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,
             MBSMRF = 1'b0;
             MUXMDR = 0;
             MDREn = 0;
-            MAREn = 1'b0;
+            MAREn = 0;
             IREn = 1'b1;
             SHF_S = 3'b000;
             ShiftEn = 0;
@@ -653,7 +653,7 @@ module ROM(R3,zero,DataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,
             MBSMRF = 1'b0;
             MUXMDR = 0;
             MDREn = 0;
-            MAREn = 1'b0;
+            MAREn = 0;
             IREn = 1'b1;
             SHF_S = 3'b000;
             ShiftEn = 0;
@@ -767,6 +767,7 @@ module ROM(R3,zero,DataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,
             end
         else if(state==8'b00001011)
             begin
+            currentState = 8'b00001011;
             MA = 2'b00;
             IREn = 1'b0;
             RW = instruction[20];
@@ -833,10 +834,10 @@ module ROM(R3,zero,DataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,
             end
         else if(state==8'b00001101)
             begin
-            currentState = 8'b00001101;
             //$display("ZERO: %b",zero);
             if(R3!=8'h00000000||instruction==32'b11101010111111111111111111111111)
             begin
+            currentState = 8'b00001101;
             MA = 2'b00;
             MB = 2'b01;
             MC = 2'b01;
@@ -846,13 +847,12 @@ module ROM(R3,zero,DataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,
             SignExtSel = 2'b10;
             DataType = 2'b00;
             RFEn = 1'b1;
-            MAREn = 1'b0;
             OP = 5'b10011;
             end
-            else
+            else if(R15==32'b10001000000000000000000000101000)
             begin
-             MA = 2'b10;
-            MB = 2'b01;
+            //$display("ITS R15");
+            MA = 2'b10;
             MC = 2'b01;
             IREn = 1'b0;
             SHF_S = 3'b100;
@@ -1190,7 +1190,7 @@ output reg [31:0] out;
 input wire IREn,clk;
 always@(posedge clk)
 begin
-if(IREn==1'b1 && in!=32'b00000000000000000000000000001011 && in!=32'b00001011000001010000011100000100)
+if(IREn==1'b1 && in!=32'b00000000000000000000000000001011)
 begin
 //$display("INSTRUCTION: %b",iDATAn);
  out = in;
@@ -1198,9 +1198,8 @@ begin
  end
 endmodule
 
-module MAR(in,out,enable,state);
+module MAR(in,out,enable);
 input [31:0] in;
-input [7:0] state;
 input wire enable;
 output reg [7:0] out;
 always@(in)
@@ -1240,7 +1239,7 @@ module main;
   wire [7:0] address;
 
   ram_256 ram(memOut,MOC,out,RW,MemEn,address,dataType,stateEncoder);
-  MAR mar(out,address,MAREn,state);
+  MAR mar(out,address,MAREn);
   //Cin
   reg Cin;
   //output
@@ -1258,7 +1257,7 @@ module main;
   multiplexer4x1 mux(outMux, stateEncoder, 8'b00000000, CR, outAdd, M);
   multiplexerB b(outMB, portB, signExtenderOut, 32'h00000000, memOut, MB);
   adder add(outMux, 8'b00000001,outAdd);
-  ROM rom(R3,zero,dataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF_S,ShiftEn,RFEn,RW,MemEn,MOV, Inv, N2, N1, N0,SignExtSel,CR,OP, outMux,clk,S1,S0,instruction);
+  ROM rom(R15,R3,zero,dataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,IREn,SHF_S,ShiftEn,RFEn,RW,MemEn,MOV, Inv, N2, N1, N0,SignExtSel,CR,OP, outMux,clk,S1,S0,instruction);
   signextender se(signExtenderOut,instruction,SHF_S);
   arithmetic_logic_unit alu(out, zero, n, c, v, portA, outMB, OP, Cin);
   rfMux mc(outMC, instruction[15:12], 4'b1111, instruction[19:16], 4'b1110, MC[1], MC[0]);
@@ -1267,14 +1266,14 @@ module main;
 
   initial
   begin
-       $display("STATE   |       MAR);
+       $display("STATE   |       MAR        ");
        $monitor("%d            %d",currentState,address);
      // $display("R0   |      R1     |    R2      |       R3      |      IR");
      // $monitor("%b            %b        %b      %b          %b",R0,R1,R2,R3,instruction);
      //$display("R2      |       R3       |STATE");
-     // $monitor("%b            %b          %d",R2,R3,currentState); 
+     // $monitor("%b            %b          %d",R2,R3,currentState);
        clk = 0;
-        repeat(305)
+        repeat(310)
         begin
             #50 clk = ~clk;
         end
