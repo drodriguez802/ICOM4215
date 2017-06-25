@@ -102,7 +102,7 @@ module ram_256 (output reg[31:0] DataOut,output reg MOC,input [31:0] DataIn,inpu
             ptr = ptr + 1;
         end
 
-    // Print Initial Memory Contents ---------------------------------------
+    Print Initial Memory Contents ---------------------------------------
         $display("----------------------------------------------");
         $display("\nInitial memory content. Instructions Loaded.\n");
         print_memory();
@@ -598,7 +598,7 @@ module ROM(R3,zero,DataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,
             MBSMRF = 1'b0;
             MUXMDR = 0;
             MDREn = 0;
-            MAREn = 0;
+            MAREn = 1'b0;
             IREn = 1'b0;
             SHF_S = 3'b000;
             ShiftEn = 0;
@@ -624,7 +624,7 @@ module ROM(R3,zero,DataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,
             MBSMRF = 1'b0;
             MUXMDR = 0;
             MDREn = 0;
-            MAREn = 0;
+            MAREn = 1'b0;
             IREn = 1'b1;
             SHF_S = 3'b000;
             ShiftEn = 0;
@@ -653,7 +653,7 @@ module ROM(R3,zero,DataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,
             MBSMRF = 1'b0;
             MUXMDR = 0;
             MDREn = 0;
-            MAREn = 0;
+            MAREn = 1'b0;
             IREn = 1'b1;
             SHF_S = 3'b000;
             ShiftEn = 0;
@@ -767,7 +767,6 @@ module ROM(R3,zero,DataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,
             end
         else if(state==8'b00001011)
             begin
-            currentState = 8'b00001011;
             MA = 2'b00;
             IREn = 1'b0;
             RW = instruction[20];
@@ -834,10 +833,10 @@ module ROM(R3,zero,DataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,
             end
         else if(state==8'b00001101)
             begin
+            currentState = 8'b00001101;
             //$display("ZERO: %b",zero);
             if(R3!=8'h00000000||instruction==32'b11101010111111111111111111111111)
             begin
-            currentState = 8'b00001101;
             MA = 2'b00;
             MB = 2'b01;
             MC = 2'b01;
@@ -847,7 +846,22 @@ module ROM(R3,zero,DataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MAREn,
             SignExtSel = 2'b10;
             DataType = 2'b00;
             RFEn = 1'b1;
+            MAREn = 1'b0;
             OP = 5'b10011;
+            end
+            else
+            begin
+             MA = 2'b10;
+            MB = 2'b01;
+            MC = 2'b01;
+            IREn = 1'b0;
+            SHF_S = 3'b100;
+            ShiftEn = 1'b1;
+            SignExtSel = 2'b10;
+            DataType = 2'b00;
+            RFEn = 1'b1;
+            MAREn = 1'b0;
+            OP = 5'b10001;
             end
             N2 = 0;
             N1 = 1;
@@ -1176,7 +1190,7 @@ output reg [31:0] out;
 input wire IREn,clk;
 always@(posedge clk)
 begin
-if(IREn==1'b1 && in!=32'b00000000000000000000000000001011)
+if(IREn==1'b1 && in!=32'b00000000000000000000000000001011 && in!=32'b00001011000001010000011100000100)
 begin
 //$display("INSTRUCTION: %b",iDATAn);
  out = in;
@@ -1184,8 +1198,9 @@ begin
  end
 endmodule
 
-module MAR(in,out,enable);
+module MAR(in,out,enable,state);
 input [31:0] in;
+input [7:0] state;
 input wire enable;
 output reg [7:0] out;
 always@(in)
@@ -1225,7 +1240,7 @@ module main;
   wire [7:0] address;
 
   ram_256 ram(memOut,MOC,out,RW,MemEn,address,dataType,stateEncoder);
-  MAR mar(out,address,MAREn);
+  MAR mar(out,address,MAREn,state);
   //Cin
   reg Cin;
   //output
@@ -1252,17 +1267,16 @@ module main;
 
   initial
   begin
-       //$display("STATE   |       MAR     |      R1      |       R2      |       R3      |       R5");
-       //$monitor("%d            %d       %b     %b    %b      %b",currentState,address,R1,R2,R3,R5);
+       $display("STATE   |       MAR);
+       $monitor("%d            %d",currentState,address);
      // $display("R0   |      R1     |    R2      |       R3      |      IR");
      // $monitor("%b            %b        %b      %b          %b",R0,R1,R2,R3,instruction);
      //$display("R2      |       R3       |STATE");
-     // $monitor("%b            %b          %d",R2,R3,currentState);
+     // $monitor("%b            %b          %d",R2,R3,currentState); 
        clk = 0;
-        repeat(310)
+        repeat(305)
         begin
             #50 clk = ~clk;
         end
       end
  endmodule
-
