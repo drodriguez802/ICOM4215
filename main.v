@@ -1266,8 +1266,8 @@ module main;
 
   initial
   begin
-       $display("STATE   |       MAR      |		R15");
-       $monitor("%d            %d	%b",currentState,address,R15);
+       $display("STATE   |       MAR ");
+       $monitor("%d            %d	",currentState,address);
      // $display("R0   |      R1     |    R2      |       R3      |      IR");
      // $monitor("%b            %b        %b      %b          %b",R0,R1,R2,R3,instruction);
      //$display("R2      |       R3       |STATE");
