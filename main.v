@@ -849,7 +849,7 @@ module ROM(R15,R3,zero,DataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MA
             RFEn = 1'b1;
             OP = 5'b10011;
             end
-            else if(R15==32'b10001000000000000000000000101000)
+            else if(R15==32'b10001000000000000000000000101000 || R15==32'b01000100000000000000000000101000)
             begin
             //$display("ITS R15");
             MA = 2'b10;
@@ -1190,7 +1190,7 @@ output reg [31:0] out;
 input wire IREn,clk;
 always@(posedge clk)
 begin
-if(IREn==1'b1 && in!=32'b00000000000000000000000000001011)
+if(IREn==1'b1 && in!=32'b00000000000000000000000000001011 && in!=32'b00001011000001010000010000000100)
 begin
 //$display("INSTRUCTION: %b",iDATAn);
  out = in;
@@ -1266,8 +1266,8 @@ module main;
 
   initial
   begin
-       $display("STATE   |       MAR        ");
-       $monitor("%d            %d",currentState,address);
+       $display("STATE   |       MAR      |		R15");
+       $monitor("%d            %d	%b",currentState,address,R15);
      // $display("R0   |      R1     |    R2      |       R3      |      IR");
      // $monitor("%b            %b        %b      %b          %b",R0,R1,R2,R3,instruction);
      //$display("R2      |       R3       |STATE");
