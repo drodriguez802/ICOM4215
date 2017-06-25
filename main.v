@@ -849,9 +849,9 @@ module ROM(R15,R3,zero,DataType,currentState,MA,MB,MC,MBS,MBSMRF,MUXMDR,MDREn,MA
             RFEn = 1'b1;
             OP = 5'b10011;
             end
-            else if(R15==32'b10001000000000000000000000101000 || R15==32'b01000100000000000000000000101000)
+            else if(R15[7:0]==8'b00101000)
             begin
-            //$display("ITS R15");
+
             MA = 2'b10;
             MC = 2'b01;
             IREn = 1'b0;
@@ -1266,7 +1266,7 @@ module main;
 
   initial
   begin
-       $display("STATE   |       MAR ");
+       $display("STATE   |       MAR	");
        $monitor("%d            %d	",currentState,address);
      // $display("R0   |      R1     |    R2      |       R3      |      IR");
      // $monitor("%b            %b        %b      %b          %b",R0,R1,R2,R3,instruction);
